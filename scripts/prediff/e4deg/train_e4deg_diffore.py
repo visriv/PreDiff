@@ -19,16 +19,16 @@ import os
 import argparse
 from einops import rearrange
 
-from prediff.datasets.sevir.sevir_torch_wrap import SEVIRLightningDataModule
-from prediff.datasets.sevir.visualization import vis_sevir_seq
-from prediff.datasets.sevir.evaluation import SEVIRSkillScore
+from prediff.datasets.e4deg.e4deg_torch_wrap import e4degLightningDataModule
+from prediff.datasets.e4deg.visualization import vis_e4deg_seq
+from prediff.datasets.e4deg.evaluation import e4degSkillScore
 from prediff.evaluation.fvd import FrechetVideoDistance
 from prediff.utils.pl_checkpoint import pl_load
 from prediff.utils.download import (
     download_pretrained_weights,
-    pretrained_sevirlr_vae_name,
-    pretrained_sevirlr_earthformerunet_name,
-    pretrained_sevirlr_alignment_name)
+    pretrained_e4deg_vae_name,
+    pretrained_e4deg_earthformerunet_name,
+    pretrained_e4deg_alignment_name)
 from prediff.utils.optim import warmup_lambda, disable_train
 from prediff.utils.layout import layout_to_in_out_slice
 from prediff.utils.path import (
@@ -39,10 +39,10 @@ from prediff.utils.path import (
 from prediff.taming import AutoencoderKL
 from prediff.models.cuboid_transformer import CuboidTransformerUNet
 from prediff.diffusion.latent_diffusion import LatentDiffusion
-from prediff.diffusion.knowledge_alignment.sevir import SEVIRAvgIntensityAlignment
+from prediff.diffusion.knowledge_alignment.sevir import e4degAvgIntensityAlignment
 
 
-pytorch_state_dict_name = "sevirlr_earthformerunet.pt"
+pytorch_state_dict_name = "e4deg_earthformerunet.pt"
 
 
 def get_alignment_kwargs_avg_x(context_seq=None, target_seq=None, ):
@@ -67,7 +67,7 @@ def get_alignment_kwargs_avg_x(context_seq=None, target_seq=None, ):
     return {"avg_x_gt": ret}
 
 
-class PreDiffSEVIRPLModule(LatentDiffusion):
+class Difforee4degPLModule(LatentDiffusion):
 
     def __init__(self,
                  total_num_steps: int,
@@ -156,7 +156,7 @@ class PreDiffSEVIRPLModule(LatentDiffusion):
             warnings.warn(f"Pretrained weights for `AutoencoderKL` not set. Run for sanity check only.")
 
         diffusion_cfg = OmegaConf.to_object(oc.model.diffusion)
-        super(PreDiffSEVIRPLModule, self).__init__(
+        super(Difforee4degPLModule, self).__init__(
             torch_nn_module=latent_model,
             layout=oc.layout.layout,
             data_shape=diffusion_cfg["data_shape"],
@@ -192,7 +192,7 @@ class PreDiffSEVIRPLModule(LatentDiffusion):
         self.use_alignment = self.alignment_type is not None
         if self.use_alignment:
             alignment_ckpt_path = os.path.join(default_pretrained_alignment_dir, knowledge_alignment_cfg["model_ckpt_path"])
-            self.alignment_obj = SEVIRAvgIntensityAlignment(
+            self.alignment_obj = e4degAvgIntensityAlignment(
                 alignment_type=knowledge_alignment_cfg["alignment_type"],
                 guide_scale=knowledge_alignment_cfg["guide_scale"],
                 model_type=knowledge_alignment_cfg["model_type"],
@@ -218,7 +218,7 @@ class PreDiffSEVIRPLModule(LatentDiffusion):
         if self.oc.eval.eval_unaligned:
             self.valid_mse = torchmetrics.MeanSquaredError()
             self.valid_mae = torchmetrics.MeanAbsoluteError()
-            self.valid_score = SEVIRSkillScore(
+            self.valid_score = e4degSkillScore(
                 mode=self.oc.dataset.metrics_mode,
                 seq_len=self.oc.layout.out_len,
                 layout=self.layout,
@@ -228,7 +228,7 @@ class PreDiffSEVIRPLModule(LatentDiffusion):
             self.test_mse = torchmetrics.MeanSquaredError()
             self.test_mae = torchmetrics.MeanAbsoluteError()
             self.test_ssim = torchmetrics.image.StructuralSimilarityIndexMeasure()
-            self.test_score = SEVIRSkillScore(
+            self.test_score = e4degSkillScore(
                 mode=self.oc.dataset.metrics_mode,
                 seq_len=self.oc.layout.out_len,
                 layout=self.layout,
@@ -244,7 +244,7 @@ class PreDiffSEVIRPLModule(LatentDiffusion):
         if self.oc.eval.eval_aligned:
             self.valid_aligned_mse = torchmetrics.MeanSquaredError()
             self.valid_aligned_mae = torchmetrics.MeanAbsoluteError()
-            self.valid_aligned_score = SEVIRSkillScore(
+            self.valid_aligned_score = e4degSkillScore(
                 mode=self.oc.dataset.metrics_mode,
                 seq_len=self.oc.layout.out_len,
                 layout=self.layout,
@@ -254,7 +254,7 @@ class PreDiffSEVIRPLModule(LatentDiffusion):
             self.test_aligned_mse = torchmetrics.MeanSquaredError()
             self.test_aligned_mae = torchmetrics.MeanAbsoluteError()
             self.test_aligned_ssim = torchmetrics.image.StructuralSimilarityIndexMeasure()
-            self.test_aligned_score = SEVIRSkillScore(
+            self.test_aligned_score = e4degSkillScore(
                 mode=self.oc.dataset.metrics_mode,
                 seq_len=self.oc.layout.out_len,
                 layout=self.layout,
@@ -465,9 +465,9 @@ class PreDiffSEVIRPLModule(LatentDiffusion):
     @classmethod
     def get_dataset_config(cls):
         cfg = OmegaConf.create()
-        cfg.dataset_name = "sevir_lr"
-        cfg.img_height = 128
-        cfg.img_width = 128
+        cfg.dataset_name = "era5_4deg"
+        cfg.img_height = 46
+        cfg.img_width = 90
         cfg.in_len = 7
         cfg.out_len = 6
         cfg.seq_len = 13
@@ -517,11 +517,11 @@ class PreDiffSEVIRPLModule(LatentDiffusion):
     @staticmethod
     def get_logging_config():
         cfg = OmegaConf.create()
-        cfg.logging_prefix = "PreDiff"
+        cfg.logging_prefix = "Diffore"
         cfg.monitor_lr = True
         cfg.monitor_device = False
         cfg.track_grad_norm = -1
-        cfg.use_wandb = False
+        cfg.use_wandb = True
         cfg.profiler = None
         cfg.save_npy = False
         return cfg
@@ -529,7 +529,7 @@ class PreDiffSEVIRPLModule(LatentDiffusion):
     @staticmethod
     def get_trainer_config():
         cfg = OmegaConf.create()
-        cfg.check_val_every_n_epoch = 1
+        cfg.check_val_every_n_epoch = 2
         cfg.log_step_ratio = 0.001  # Logging every 1% of the total training steps per epoch
         cfg.precision = 32
         cfg.find_unused_parameters = True
@@ -686,7 +686,7 @@ class PreDiffSEVIRPLModule(LatentDiffusion):
     def get_sevir_datamodule(dataset_cfg,
                              micro_batch_size: int = 1,
                              num_workers: int = 8):
-        dm = SEVIRLightningDataModule(
+        dm = e4degLightningDataModule(
             seq_len=dataset_cfg["seq_len"],
             sample_mode=dataset_cfg["sample_mode"],
             stride=dataset_cfg["stride"],
@@ -703,6 +703,7 @@ class PreDiffSEVIRPLModule(LatentDiffusion):
             start_date=dataset_cfg["start_date"],
             train_test_split_date=dataset_cfg["train_test_split_date"],
             end_date=dataset_cfg["end_date"],
+            train_ratio=dataset_cfg["train_ratio"],
             val_ratio=dataset_cfg["val_ratio"],
             num_workers=num_workers, )
         return dm
@@ -746,10 +747,10 @@ class PreDiffSEVIRPLModule(LatentDiffusion):
             out[0] should be a torch.Tensor which is the target to generate
             out[1] should be a dict consists of several key-value pairs for conditioning
         """
-        return self._get_input_sevirlr(batch=batch, return_verbose=kwargs.get("return_verbose", False))
+        return self._get_input_e4deg(batch=batch, return_verbose=kwargs.get("return_verbose", False))
 
     @torch.no_grad()
-    def _get_input_sevirlr(self, batch, return_verbose=False):
+    def _get_input_e4deg(self, batch, return_verbose=False):
         seq = batch
         in_seq = seq[self.in_slice]
         out_seq = seq[self.out_slice].contiguous()
@@ -1064,7 +1065,7 @@ class PreDiffSEVIRPLModule(LatentDiffusion):
             label_list = [context_label, target_label, pred_label]
         if data_idx in example_data_idx_list:
             png_save_name = f"{prefix}{mode}_epoch_{self.current_epoch}_data_{data_idx}{suffix}.png"
-            vis_sevir_seq(
+            vis_e4deg_seq(
                 save_path=os.path.join(self.example_save_dir, png_save_name),
                 seq=seq_list,
                 label=label_list,
@@ -1096,7 +1097,7 @@ class PreDiffSEVIRPLModule(LatentDiffusion):
 
 def get_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--save', default='tmp_sevirlr', type=str)
+    parser.add_argument('--save', default='tmp_e4deg', type=str)
     parser.add_argument('--nodes', default=1, type=int,
                         help="Number of nodes in DDP training.")
     parser.add_argument('--gpus', default=1, type=int,
@@ -1114,15 +1115,15 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
     if args.pretrained:
-        args.cfg = os.path.abspath(os.path.join(os.path.dirname(__file__), "prediff_sevirlr_v1.yaml"))
+        args.cfg = os.path.abspath(os.path.join(os.path.dirname(__file__), "diffore_e4deg_v1.yaml"))
         # Download pretrained weights
-        download_pretrained_weights(ckpt_name=pretrained_sevirlr_vae_name,
+        download_pretrained_weights(ckpt_name=pretrained_e4deg_vae_name,
                                     save_dir=default_pretrained_vae_dir,
                                     exist_ok=False)
-        download_pretrained_weights(ckpt_name=pretrained_sevirlr_earthformerunet_name,
+        download_pretrained_weights(ckpt_name=pretrained_e4deg_earthformerunet_name,
                                     save_dir=default_pretrained_earthformerunet_dir,
                                     exist_ok=False)
-        download_pretrained_weights(ckpt_name=pretrained_sevirlr_alignment_name,
+        download_pretrained_weights(ckpt_name=pretrained_e4deg_alignment_name,
                                     save_dir=default_pretrained_alignment_dir,
                                     exist_ok=False)
     if args.cfg is not None:
@@ -1134,7 +1135,7 @@ def main():
         seed = oc_from_file.optim.seed
         float32_matmul_precision = oc_from_file.optim.float32_matmul_precision
     else:
-        dataset_cfg = OmegaConf.to_object(PreDiffSEVIRPLModule.get_dataset_config())
+        dataset_cfg = OmegaConf.to_object(Difforee4degPLModule.get_dataset_config())
         micro_batch_size = 1
         total_batch_size = int(micro_batch_size * args.nodes * args.gpus)
         max_epochs = None
@@ -1142,19 +1143,19 @@ def main():
         float32_matmul_precision = "high"
     torch.set_float32_matmul_precision(float32_matmul_precision)
     seed_everything(seed, workers=True)
-    dm = PreDiffSEVIRPLModule.get_sevir_datamodule(
+    dm = Difforee4degPLModule.get_sevir_datamodule(
         dataset_cfg=dataset_cfg,
         micro_batch_size=micro_batch_size,
         num_workers=8, )
     dm.prepare_data()
     dm.setup()
     accumulate_grad_batches = total_batch_size // (micro_batch_size * args.nodes * len(str(args.gpus).split(',')))
-    total_num_steps = PreDiffSEVIRPLModule.get_total_num_steps(
+    total_num_steps = Difforee4degPLModule.get_total_num_steps(
         epoch=max_epochs,
         num_samples=dm.num_train_samples,
         total_batch_size=total_batch_size,
     )
-    pl_module = PreDiffSEVIRPLModule(
+    pl_module = Difforee4degPLModule(
         total_num_steps=total_num_steps,
         save_dir=args.save,
         oc_file=args.cfg)
@@ -1168,7 +1169,7 @@ def main():
     if args.pretrained:
         # load Earthformer-UNet
         earthformerunet_ckpt_path = os.path.join(default_pretrained_earthformerunet_dir,
-                                                 pretrained_sevirlr_earthformerunet_name)
+                                                 pretrained_e4deg_earthformerunet_name)
         state_dict = torch.load(earthformerunet_ckpt_path,
                                 map_location=torch.device("cpu"))
         pl_module.torch_nn_module.load_state_dict(state_dict=state_dict)

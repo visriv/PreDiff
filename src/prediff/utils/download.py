@@ -6,6 +6,10 @@ pretrained_sevirlr_vae_name = "pretrained_sevirlr_vae_8x8x64_v1.pt"
 pretrained_sevirlr_earthformerunet_name = "pretrained_sevirlr_earthformerunet_v1.pt"
 pretrained_sevirlr_alignment_name = "pretrained_sevirlr_alignment_avg_x_cuboid_v1.pt"
 
+pretrained_e4deg_vae_name = "last.ckpt" 
+# pretrained_e4deg_vae_name = "pretrained_e4deg_vae_8x8x64_v1.pt"
+pretrained_e4deg_earthformerunet_name = "pretrained_e4deg_earthformerunet_v1.pt"
+
 pretrained_i3d_400_name = "pretrained_i3d_400.pt"
 pretrained_i3d_600_name = "pretrained_i3d_600.pt"
 

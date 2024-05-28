@@ -18,30 +18,30 @@ import os
 import argparse
 from einops import rearrange
 
-from prediff.datasets.sevir.sevir_torch_wrap import SEVIRLightningDataModule
-from prediff.datasets.sevir.visualization import vis_sevir_seq
+from prediff.datasets.e4deg.e4deg_torch_wrap import e4degLightningDataModule
+from prediff.datasets.e4deg.visualization import vis_e4deg_seq,  vis_e4deg_custom
 from prediff.taming import AutoencoderKL, LPIPSWithDiscriminator
 from prediff.utils.optim import warmup_lambda
 from prediff.utils.pl_checkpoint import pl_load
 from prediff.utils.download import (
     download_pretrained_weights,
-    pretrained_sevirlr_vae_name)
+    pretrained_e4deg_vae_name)
 from prediff.utils.path import default_pretrained_vae_dir
 from prediff.utils.path import default_exps_dir
 
 
-pytorch_state_dict_name = "sevirlr_vae.pt"
-pytorch_loss_state_dict_name = "sevirlr_vae_loss.pt"
+pytorch_state_dict_name = "e4deg_vae.pt"
+pytorch_loss_state_dict_name = "e4deg_vae_loss.pt"
 
 
-class VAESEVIRPLModule(pl.LightningModule):
+class VAEe4degPLModule(pl.LightningModule):
 
     def __init__(self,
                  total_num_steps: int,
                  accumulate_grad_batches: int = 1,
                  oc_file: str = None,
                  save_dir: str = None):
-        super(VAESEVIRPLModule, self).__init__()
+        super(VAEe4degPLModule, self).__init__()
         if oc_file is not None:
             oc_from_file = OmegaConf.load(open(oc_file, "r"))
         else:
@@ -139,8 +139,8 @@ class VAESEVIRPLModule(pl.LightningModule):
     @staticmethod
     def get_layout_config():
         cfg = OmegaConf.create()
-        cfg.img_height = 128
-        cfg.img_width = 128
+        cfg.img_height = 46
+        cfg.img_width = 90
         cfg.layout = "NHWC"
         return cfg
 
@@ -171,9 +171,9 @@ class VAESEVIRPLModule(pl.LightningModule):
     @classmethod
     def get_dataset_config(cls):
         cfg = OmegaConf.create()
-        cfg.dataset_name = "sevirlr"
-        cfg.img_height = 128
-        cfg.img_width = 128
+        cfg.dataset_name = "era5_4deg"
+        cfg.img_height = 46
+        cfg.img_width = 90
         cfg.in_len = 0
         cfg.out_len = 1
         cfg.seq_len = 1
@@ -222,7 +222,7 @@ class VAESEVIRPLModule(pl.LightningModule):
     @staticmethod
     def get_logging_config():
         cfg = OmegaConf.create()
-        cfg.logging_prefix = "SEVIRLR"
+        cfg.logging_prefix = "e4deg"
         cfg.monitor_lr = True
         cfg.monitor_device = False
         cfg.track_grad_norm = -1
@@ -391,33 +391,33 @@ class VAESEVIRPLModule(pl.LightningModule):
         return int(epoch * num_samples / total_batch_size)
 
     @staticmethod
-    def get_sevir_datamodule(dataset_cfg,
+    def get_e4deg_datamodule(dataset_cfg,
                              micro_batch_size: int = 1,
                              num_workers: int = 8):
-        dm = SEVIRLightningDataModule(
+        dm = e4degLightningDataModule(
             seq_len=dataset_cfg["seq_len"],
-            sample_mode=dataset_cfg["sample_mode"],
-            stride=dataset_cfg["stride"],
+            crop = dataset_cfg["crop"],
+            # stride=dataset_cfg["stride"],
             batch_size=micro_batch_size,
             layout=dataset_cfg["layout"],
             output_type=np.float32,
-            preprocess=True,
+            # preprocess=True,
             rescale_method="01",
             verbose=False,
-            aug_mode=dataset_cfg["aug_mode"],
+            # aug_mode=dataset_cfg["aug_mode"],
             ret_contiguous=False,
             # datamodule_only
             dataset_name=dataset_cfg["dataset_name"],
-            start_date=dataset_cfg["start_date"],
-            train_test_split_date=dataset_cfg["train_test_split_date"],
-            end_date=dataset_cfg["end_date"],
+            # start_date=dataset_cfg["start_date"],
+            # train_test_split_date=dataset_cfg["train_test_split_date"],
+            # end_date=dataset_cfg["end_date"],
+            train_ratio  = dataset_cfg["train_ratio"],
             val_ratio=dataset_cfg["val_ratio"],
             num_workers=num_workers, )
         return dm
 
     def get_last_layer(self):
         return self.torch_nn_module.decoder.conv_out.weight
-
     def get_input(self, batch):
         target_bchw = rearrange(batch, "b 1 h w c -> b c h w").contiguous()
         mask = None
@@ -450,7 +450,7 @@ class VAESEVIRPLModule(pl.LightningModule):
         aeloss, log_dict_ae = self.loss(target_bchw, pred_bchw, posterior, optimizer_idx=0, global_step=self.global_step,
                                         mask=None, last_layer=self.get_last_layer(), split="train")
         self.log("aeloss", aeloss, prog_bar=True, logger=True, on_step=True, on_epoch=True, sync_dist=False)
-        self.log_dict(log_dict_ae, prog_bar=False, logger=True, on_step=True, on_epoch=False, sync_dist=False)
+        # self.log_dict(log_dict_ae, prog_bar=False, logger=True, on_step=True, on_epoch=False, sync_dist=False)
         g_opt.zero_grad()
         self.manual_backward(aeloss)
         if (batch_idx + 1) % self.accumulate_grad_batches == 0:
@@ -462,7 +462,7 @@ class VAESEVIRPLModule(pl.LightningModule):
         discloss, log_dict_disc = self.loss(target_bchw, pred_bchw, posterior, optimizer_idx=1, global_step=self.global_step,
                                             mask=None, last_layer=self.get_last_layer(), split="train")
         self.log("discloss", discloss, prog_bar=True, logger=True, on_step=True, on_epoch=True, sync_dist=False)
-        self.log_dict(log_dict_disc, prog_bar=False, logger=True, on_step=True, on_epoch=False, sync_dist=False)
+        # self.log_dict(log_dict_disc, prog_bar=False, logger=True, on_step=True, on_epoch=False, sync_dist=False)
 
         d_opt.zero_grad()
         self.manual_backward(discloss)
@@ -490,8 +490,9 @@ class VAESEVIRPLModule(pl.LightningModule):
             discloss, log_dict_disc = self.loss(target_bchw, pred_bchw, posterior, 1, self.global_step,
                                                 mask=None, last_layer=self.get_last_layer(), split="val")
             self.log("val/rec_loss", log_dict_ae["val/rec_loss"], prog_bar=False, logger=True, on_step=False, on_epoch=True, sync_dist=True)
+            log_dict_ae = {key: value.to("cuda") for key, value in log_dict_ae.items()}
             self.log_dict(log_dict_ae, prog_bar=False, logger=True, on_step=False, on_epoch=True, sync_dist=True)
-            self.log_dict(log_dict_disc, prog_bar=False, logger=True, on_step=False, on_epoch=True, sync_dist=True)
+            # self.log_dict(log_dict_disc, prog_bar=False, logger=True, on_step=False, on_epoch=True, sync_dist=True)
             self.valid_mse(pred_bchw, target_bchw)
             self.valid_mae(pred_bchw, target_bchw)
 
@@ -575,11 +576,14 @@ class VAESEVIRPLModule(pl.LightningModule):
                     "Target",
                     f"{self.oc.logging.logging_prefix}",
                 ]
-                vis_sevir_seq(
-                    save_path=os.path.join(self.example_save_dir, save_name),
+                # vis_e4deg_seq(
+                #     save_path=os.path.join(self.example_save_dir, save_name),
+                #     seq=seq_list,
+                #     label=label_list,
+                #     plot_stride=1, fs=20, label_rotation=90)
+                vis_e4deg_custom(save_path=os.path.join(self.example_save_dir, save_name),
                     seq=seq_list,
-                    label=label_list,
-                    plot_stride=1, fs=20, label_rotation=90)
+                    label=label_list,)
 
     def on_before_optimizer_step(self, optimizer):
         # Compute the 2-norm for each layer
@@ -592,12 +596,14 @@ class VAESEVIRPLModule(pl.LightningModule):
 
 def get_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--save', default='tmp_sevirlr', type=str)
+    parser.add_argument('--save', default='tmp_e4deg', type=str)
     parser.add_argument('--gpus', default=1, type=int)
     parser.add_argument('--cfg', default=None, type=str)
     parser.add_argument('--test', action='store_true')
     parser.add_argument('--ckpt_name', default=None, type=str,
-                        help='The model checkpoint trained on SEVIR-LR.')
+                        help='The model checkpoint trained on e4deg.')
+    parser.add_argument('--download', default=False, type=bool,
+                        help='if the checkpoint has to be downloaded')
     parser.add_argument('--pretrained', action='store_true',
                         help='Load pretrained checkpoints for test.')
     return parser
@@ -607,10 +613,14 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
     if args.pretrained:
-        args.cfg = os.path.abspath(os.path.join(os.path.dirname(__file__), "vae_sevirlr_v1.yaml"))
-        download_pretrained_weights(ckpt_name=pretrained_sevirlr_vae_name,
+        args.cfg = os.path.abspath(os.path.join(os.path.dirname(__file__), "vae_e4deg_v1.yaml"))
+        if args.download == True:
+
+            download_pretrained_weights(ckpt_name=pretrained_e4deg_vae_name,
                                     save_dir=default_pretrained_vae_dir,
                                     exist_ok=False)
+        # else:
+
     if args.cfg is not None:
         oc_from_file = OmegaConf.load(open(args.cfg, "r"))
         dataset_cfg = OmegaConf.to_object(oc_from_file.dataset)
@@ -620,7 +630,7 @@ def main():
         seed = oc_from_file.optim.seed
         float32_matmul_precision = oc_from_file.optim.float32_matmul_precision
     else:
-        dataset_cfg = OmegaConf.to_object(VAESEVIRPLModule.get_dataset_config())
+        dataset_cfg = OmegaConf.to_object(VAEe4degPLModule.get_dataset_config())
         micro_batch_size = 1
         total_batch_size = int(micro_batch_size * args.gpus)
         max_epochs = None
@@ -628,19 +638,20 @@ def main():
         float32_matmul_precision = "high"
     torch.set_float32_matmul_precision(float32_matmul_precision)
     seed_everything(seed, workers=True)
-    dm = VAESEVIRPLModule.get_sevir_datamodule(
+    dm = VAEe4degPLModule.get_e4deg_datamodule(
         dataset_cfg=dataset_cfg,
         micro_batch_size=micro_batch_size,
         num_workers=8,)
     dm.prepare_data()
     dm.setup()
     accumulate_grad_batches = total_batch_size // (micro_batch_size * args.gpus)
-    total_num_steps = VAESEVIRPLModule.get_total_num_steps(
+    total_num_steps = VAEe4degPLModule.get_total_num_steps(
         epoch=max_epochs,
         num_samples=dm.num_train_samples,
         total_batch_size=total_batch_size,
     )
-    pl_module = VAESEVIRPLModule(
+    print('Total num of steps:', total_num_steps)
+    pl_module = VAEe4degPLModule(
         total_num_steps=total_num_steps,
         accumulate_grad_batches=accumulate_grad_batches,
         save_dir=args.save,
@@ -649,7 +660,7 @@ def main():
     trainer = Trainer(**trainer_kwargs)
     if args.pretrained:
         vae_ckpt_path = os.path.join(default_pretrained_vae_dir,
-                                     pretrained_sevirlr_vae_name)
+                                     pretrained_e4deg_vae_name)
         state_dict = torch.load(vae_ckpt_path,
                                 map_location=torch.device("cpu"))
         pl_module.torch_nn_module.load_state_dict(state_dict=state_dict)
@@ -691,6 +702,7 @@ def main():
                 loss_state_dict[key[len(loss_key):]] = val
             else:
                 unexpected_dict[key] = val
+        print('saving vae state dict')
         torch.save(vae_state_dict, os.path.join(pl_module.save_dir, "checkpoints", pytorch_state_dict_name))
         torch.save(loss_state_dict, os.path.join(pl_module.save_dir, "checkpoints", pytorch_loss_state_dict_name))
         # test
