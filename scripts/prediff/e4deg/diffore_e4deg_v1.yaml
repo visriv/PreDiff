@@ -3,9 +3,9 @@ dataset:
   crop: 32
   img_height: 46
   img_width: 90
-  in_len: 7
-  out_len: 6
-  seq_len: 13
+  in_len: 5
+  out_len: 1
+  seq_len: 6
   plot_stride: 1
   interval_real_time: 10
   sample_mode: "sequent"
@@ -23,8 +23,8 @@ dataset:
 layout:
   in_len: 7
   out_len: 6
-  img_height: 46
-  img_width: 90
+  img_height: 32
+  img_width: 32
   data_channels: 1
   layout: "NTHWC"
 optim:
@@ -80,9 +80,10 @@ eval:
 model:
   diffusion:
     data_shape: [6, 128, 128, 1]
+    timesteps: 100
     beta_schedule: "linear"
     use_ema: true
-    log_every_t: 100
+    log_every_t: 50
     clip_denoised: false
     linear_start: 1e-4
     linear_end: 2e-2
@@ -95,7 +96,7 @@ model:
     learn_logvar: true
     logvar_init: 0.
     # latent diffusion
-    latent_shape: [6, 16, 16, 64]
+    latent_shape: [6, 4, 4, 64]
     cond_stage_model: "__is_first_stage__"
     num_timesteps_cond: null
     cond_stage_trainable: false
@@ -107,8 +108,8 @@ model:
     alignment_type: null
     # alignment_type: "avg_x"
   latent_model:
-    input_shape: [7, 16, 16, 64]
-    target_shape: [6, 16, 16, 64]
+    input_shape: [7, 4, 4, 64]
+    target_shape: [6, 4, 4, 64]
     base_units: 256
     # block_units: null
     scale_alpha: 1.0
@@ -157,7 +158,7 @@ model:
     time_embed_dropout: 0.0
     unet_res_connect: true
   vae:
-    pretrained_ckpt_path: "pretrained_e4deg_vae_8x8x64_v1.pt"
+    pretrained_ckpt_path: "last_2805.ckpt"
     data_channels: 1
     down_block_types: ['DownEncoderBlock2D', 'DownEncoderBlock2D', 'DownEncoderBlock2D', 'DownEncoderBlock2D']
     in_channels: 1

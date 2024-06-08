@@ -1148,6 +1148,8 @@ def main():
         num_workers=8, )
     dm.prepare_data()
     dm.setup()
+    train_dl = dm.train_dataloader()
+    
     accumulate_grad_batches = total_batch_size // (micro_batch_size * args.nodes * len(str(args.gpus).split(',')))
     total_num_steps = PreDiffSEVIRPLModule.get_total_num_steps(
         epoch=max_epochs,

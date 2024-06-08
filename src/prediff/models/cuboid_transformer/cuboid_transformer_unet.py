@@ -437,8 +437,8 @@ class CuboidTransformerUNet(nn.Module):
         t_emb = self.time_embed(timestep_embedding(t, self.block_units[0]))
         if self.unet_res_connect:
             res_connect_l = []
-        if verbose:
-            print("downsampling")
+
+        # print("downsampling")
         for i in range(self.num_blocks):
             # Downample
             if i > 0:
@@ -463,8 +463,12 @@ class CuboidTransformerUNet(nn.Module):
                     print(f"global_vectors.shape = {global_vectors.shape}")
             if self.unet_res_connect and i < self.num_blocks - 1:
                 res_connect_l.append(x)
-        if verbose:
-            print("upsampling")
+        
+
+
+
+        # print("upsampling")
+        # print(x.shape)
         for i in range(self.num_blocks - 1, -1, -1):
             if verbose:
                 print(f"x.shape = {x.shape}")

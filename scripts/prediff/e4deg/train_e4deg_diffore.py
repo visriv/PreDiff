@@ -20,15 +20,14 @@ import argparse
 from einops import rearrange
 
 from prediff.datasets.e4deg.e4deg_torch_wrap import e4degLightningDataModule
-from prediff.datasets.e4deg.visualization import vis_e4deg_seq
+from prediff.datasets.e4deg.visualization import vis_e4deg_seq,  vis_e4deg_custom
 from prediff.datasets.e4deg.evaluation import e4degSkillScore
 from prediff.evaluation.fvd import FrechetVideoDistance
 from prediff.utils.pl_checkpoint import pl_load
 from prediff.utils.download import (
     download_pretrained_weights,
     pretrained_e4deg_vae_name,
-    pretrained_e4deg_earthformerunet_name,
-    pretrained_e4deg_alignment_name)
+    pretrained_e4deg_earthformerunet_name)
 from prediff.utils.optim import warmup_lambda, disable_train
 from prediff.utils.layout import layout_to_in_out_slice
 from prediff.utils.path import (
@@ -39,7 +38,7 @@ from prediff.utils.path import (
 from prediff.taming import AutoencoderKL
 from prediff.models.cuboid_transformer import CuboidTransformerUNet
 from prediff.diffusion.latent_diffusion import LatentDiffusion
-from prediff.diffusion.knowledge_alignment.sevir import e4degAvgIntensityAlignment
+# from prediff.diffusion.knowledge_alignment.sevir import e4degAvgIntensityAlignment
 
 
 pytorch_state_dict_name = "e4deg_earthformerunet.pt"
@@ -151,7 +150,15 @@ class Difforee4degPLModule(LatentDiffusion):
         if pretrained_ckpt_path is not None:
             state_dict = torch.load(os.path.join(default_pretrained_vae_dir, vae_cfg["pretrained_ckpt_path"]),
                                     map_location=torch.device("cpu"))
-            first_stage_model.load_state_dict(state_dict=state_dict)
+            
+            state_dict = state_dict['state_dict']
+            model_kay = "torch_nn_module."
+            model_state_dict = OrderedDict()
+            for key, val in state_dict.items():
+                if key.startswith(model_kay):
+                    model_state_dict[key.replace(model_kay, "")] = val
+
+            first_stage_model.load_state_dict(state_dict=model_state_dict)
         else:
             warnings.warn(f"Pretrained weights for `AutoencoderKL` not set. Run for sanity check only.")
 
@@ -683,26 +690,26 @@ class Difforee4degPLModule(LatentDiffusion):
         return int(epoch * num_samples / total_batch_size)
 
     @staticmethod
-    def get_sevir_datamodule(dataset_cfg,
+    def get_e4deg_datamodule(dataset_cfg,
                              micro_batch_size: int = 1,
                              num_workers: int = 8):
         dm = e4degLightningDataModule(
             seq_len=dataset_cfg["seq_len"],
-            sample_mode=dataset_cfg["sample_mode"],
-            stride=dataset_cfg["stride"],
+            crop = dataset_cfg["crop"],
+            # stride=dataset_cfg["stride"],
             batch_size=micro_batch_size,
             layout=dataset_cfg["layout"],
             output_type=np.float32,
-            preprocess=True,
+            # preprocess=True,
             rescale_method="01",
             verbose=False,
-            aug_mode=dataset_cfg["aug_mode"],
+            # aug_mode=dataset_cfg["aug_mode"],
             ret_contiguous=False,
             # datamodule_only
             dataset_name=dataset_cfg["dataset_name"],
-            start_date=dataset_cfg["start_date"],
-            train_test_split_date=dataset_cfg["train_test_split_date"],
-            end_date=dataset_cfg["end_date"],
+            # start_date=dataset_cfg["start_date"],
+            # train_test_split_date=dataset_cfg["train_test_split_date"],
+            # end_date=dataset_cfg["end_date"],
             train_ratio=dataset_cfg["train_ratio"],
             val_ratio=dataset_cfg["val_ratio"],
             num_workers=num_workers, )
@@ -788,7 +795,7 @@ class Difforee4degPLModule(LatentDiffusion):
                             use_alignment=True,
                             alignment_kwargs=alignment_kwargs,
                             verbose=False, ).contiguous()
-                        aligned_pred_seq_list.append(pred_seq[0].detach().float().cpu().numpy())
+                        aligned_pred_seq_list.append(pred_seq[0].detach().float().cpu().numpy()*std+mean)
                         aligned_pred_label_list.append(f"{self.oc.logging.logging_prefix}_aligned_pred_{i}")
                     # no alignment
                     if self.oc.eval.eval_unaligned:
@@ -797,14 +804,14 @@ class Difforee4degPLModule(LatentDiffusion):
                             batch_size=micro_batch_size,
                             return_intermediates=False,
                             verbose=False, ).contiguous()
-                        pred_seq_list.append(pred_seq[0].detach().float().cpu().numpy())
+                        pred_seq_list.append(pred_seq[0].detach().float().cpu().numpy()*std+mean)
                         pred_label_list.append(f"{self.oc.logging.logging_prefix}_pred_{i}")
                 pred_seq_list = aligned_pred_seq_list + pred_seq_list
                 pred_label_list = aligned_pred_label_list + pred_label_list
                 self.save_vis_step_end(
                     data_idx=data_idx,
-                    context_seq=context_seq[0].detach().float().cpu().numpy(),
-                    target_seq=target_seq[0].detach().float().cpu().numpy(),
+                    context_seq=context_seq[0].detach().float().cpu().numpy()*std+mean,
+                    target_seq=target_seq[0].detach().float().cpu().numpy()*std+mean,
                     pred_seq=pred_seq_list,
                     pred_label=pred_label_list,
                     mode="train", )
@@ -842,7 +849,7 @@ class Difforee4degPLModule(LatentDiffusion):
                         use_alignment=True,
                         alignment_kwargs=alignment_kwargs,
                         verbose=False, ).contiguous()
-                    aligned_pred_seq_list.append(pred_seq[0].detach().float().cpu().numpy())
+                    aligned_pred_seq_list.append(pred_seq[0].detach().float().cpu().numpy()*std+mean)
                     aligned_pred_label_list.append(f"{self.oc.logging.logging_prefix}_aligned_pred_{i}")
                     if pred_seq.dtype is not torch.float:
                         pred_seq = pred_seq.float()
@@ -856,7 +863,7 @@ class Difforee4degPLModule(LatentDiffusion):
                         batch_size=micro_batch_size,
                         return_intermediates=False,
                         verbose=False, ).contiguous()
-                    pred_seq_list.append(pred_seq[0].detach().float().cpu().numpy())
+                    pred_seq_list.append(pred_seq[0].detach().float().cpu().numpy()*std+mean)
                     pred_label_list.append(f"{self.oc.logging.logging_prefix}_pred_{i}")
                     if pred_seq.dtype is not torch.float:
                         pred_seq = pred_seq.float()
@@ -867,8 +874,8 @@ class Difforee4degPLModule(LatentDiffusion):
             pred_label_list = aligned_pred_label_list + pred_label_list
             self.save_vis_step_end(
                 data_idx=data_idx,
-                context_seq=context_seq[0].detach().float().cpu().numpy(),
-                target_seq=target_seq[0].detach().float().cpu().numpy(),
+                context_seq=context_seq[0].detach().float().cpu().numpy()*std+mean,
+                target_seq=target_seq[0].detach().float().cpu().numpy()*std+mean,
                 pred_seq=pred_seq_list,
                 pred_label=pred_label_list,
                 mode="val",
@@ -933,7 +940,7 @@ class Difforee4degPLModule(LatentDiffusion):
                         npy_path = os.path.join(self.npy_save_dir,
                                                 f"batch{batch_idx}_rank{self.local_rank}_sample{i}_aligned.npy")
                         np.save(npy_path, pred_seq.detach().float().cpu().numpy())
-                    aligned_pred_seq_list.append(pred_seq[0].detach().float().cpu().numpy())
+                    aligned_pred_seq_list.append(pred_seq[0].detach().float().cpu().numpy()*std+mean)
                     aligned_pred_label_list.append(f"{self.oc.logging.logging_prefix}_aligned_pred_{i}")
                     if pred_seq.dtype is not torch.float:
                         pred_seq = pred_seq.float()
@@ -954,7 +961,7 @@ class Difforee4degPLModule(LatentDiffusion):
                         npy_path = os.path.join(self.npy_save_dir,
                                                 f"batch{batch_idx}_rank{self.local_rank}_sample{i}.npy")
                         np.save(npy_path, pred_seq.detach().float().cpu().numpy())
-                    pred_seq_list.append(pred_seq[0].detach().float().cpu().numpy())
+                    pred_seq_list.append(pred_seq[0].detach().float().cpu().numpy()*std+mean)
                     pred_label_list.append(f"{self.oc.logging.logging_prefix}_pred_{i}")
                     if pred_seq.dtype is not torch.float:
                         pred_seq = pred_seq.float()
@@ -972,8 +979,8 @@ class Difforee4degPLModule(LatentDiffusion):
             pred_label_list = aligned_pred_label_list + pred_label_list
             self.save_vis_step_end(
                 data_idx=data_idx,
-                context_seq=context_seq[0].detach().float().cpu().numpy(),
-                target_seq=target_seq[0].detach().float().cpu().numpy(),
+                context_seq=context_seq[0].detach().float().cpu().numpy()*std+mean,
+                target_seq=target_seq[0].detach().float().cpu().numpy()*std+mean,
                 pred_seq=pred_seq_list,
                 pred_label=pred_label_list,
                 mode="test",
@@ -1065,14 +1072,21 @@ class Difforee4degPLModule(LatentDiffusion):
             label_list = [context_label, target_label, pred_label]
         if data_idx in example_data_idx_list:
             png_save_name = f"{prefix}{mode}_epoch_{self.current_epoch}_data_{data_idx}{suffix}.png"
-            vis_e4deg_seq(
-                save_path=os.path.join(self.example_save_dir, png_save_name),
-                seq=seq_list,
-                label=label_list,
-                interval_real_time=10,
-                plot_stride=1, fs=self.oc.eval.fs,
-                label_offset=self.oc.eval.label_offset,
-                label_avg_int=self.oc.eval.label_avg_int, )
+            # vis_e4deg_seq(
+            #     save_path=os.path.join(self.example_save_dir, png_save_name),
+            #     seq=seq_list,
+            #     label=label_list,
+            #     interval_real_time=10,
+            #     plot_stride=1, fs=self.oc.eval.fs,
+            #     label_offset=self.oc.eval.label_offset,
+            #     label_avg_int=self.oc.eval.label_avg_int, )
+            vis_e4deg_custom(save_path=os.path.join(self.example_save_dir, png_save_name),
+                    seq=seq_list,
+                    label=label_list,
+                    nrows = 3,
+                    ncols = [7, 6, 6],
+                    maxcols = 10,
+                    )
 
     def log_score_epoch_end(self, score_dict: Dict, prefix: str = "valid"):
         for metrics in self.oc.dataset.metrics_list:
@@ -1105,7 +1119,7 @@ def get_parser():
     parser.add_argument('--cfg', default=None, type=str)
     parser.add_argument('--test', action='store_true')
     parser.add_argument('--ckpt_name', default=None, type=str,
-                        help='The model checkpoint trained on SEVIR-LR.')
+                        help='The model checkpoint trained on e4deg.')
     parser.add_argument('--pretrained', action='store_true',
                         help='Load pretrained checkpoints for test.')
     return parser
@@ -1143,12 +1157,24 @@ def main():
         float32_matmul_precision = "high"
     torch.set_float32_matmul_precision(float32_matmul_precision)
     seed_everything(seed, workers=True)
-    dm = Difforee4degPLModule.get_sevir_datamodule(
+    dm = Difforee4degPLModule.get_e4deg_datamodule(
         dataset_cfg=dataset_cfg,
         micro_batch_size=micro_batch_size,
         num_workers=8, )
     dm.prepare_data()
     dm.setup()
+    global std, mean
+    std = dm.std
+    mean = dm.mean
+
+    train_dl = dm.train_dataloader()
+    for i, (batch_data, batch_labels) in enumerate(train_dl):
+        print(f'Batch {i+1}')
+        print('Data:', batch_data.shape)
+        print('Labels:', batch_labels.shape)
+        break
+
+
     accumulate_grad_batches = total_batch_size // (micro_batch_size * args.nodes * len(str(args.gpus).split(',')))
     total_num_steps = Difforee4degPLModule.get_total_num_steps(
         epoch=max_epochs,
