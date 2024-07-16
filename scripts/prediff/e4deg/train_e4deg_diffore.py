@@ -867,8 +867,10 @@ class Difforee4degPLModule(LatentDiffusion):
                     pred_label_list.append(f"{self.oc.logging.logging_prefix}_pred_{i}")
                     if pred_seq.dtype is not torch.float:
                         pred_seq = pred_seq.float()
-                    self.valid_mse(pred_seq, target_seq)
-                    self.valid_mae(pred_seq, target_seq)
+                    self.valid_mse(pred_seq,
+                                   target_seq)
+                    self.valid_mae(pred_seq*std+mean,
+                                    target_seq*std+mean)
                     self.valid_score.update(pred_seq, target_seq)
             pred_seq_list = aligned_pred_seq_list + pred_seq_list
             pred_label_list = aligned_pred_label_list + pred_label_list
@@ -966,7 +968,8 @@ class Difforee4degPLModule(LatentDiffusion):
                     if pred_seq.dtype is not torch.float:
                         pred_seq = pred_seq.float()
                     self.test_mse(pred_seq, target_seq)
-                    self.test_mae(pred_seq, target_seq)
+                    self.test_mae(pred_seq*std+mean,
+                                  target_seq*std+mean)
                     self.test_score.update(pred_seq, target_seq)
                     self.test_fvd.update(pred_seq, real=False)
                     pred_seq_bchw = rearrange(pred_seq, "b t h w c -> (b t) c h w")
@@ -1084,7 +1087,7 @@ class Difforee4degPLModule(LatentDiffusion):
                     seq=seq_list,
                     label=label_list,
                     nrows = 3,
-                    ncols = [7, 6, 6],
+                    ncols = [seq_list[0].shape[0], seq_list[1].shape[0], seq_list[2].shape[0]],
                     maxcols = 10,
                     )
 
@@ -1242,6 +1245,7 @@ def main():
                 unexpected_dict[key] = val
         torch.save(state_dict, os.path.join(pl_module.save_dir, "checkpoints", pytorch_state_dict_name))
         # test
+        print('testing now')
         trainer.test(ckpt_path="best",
                      datamodule=dm)
 
