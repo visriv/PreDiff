@@ -43,6 +43,9 @@ __pycache__/
 *.npy
 *.npz
 
+# data files
+*.zip
+
 # TFRecord data file
 *.tfrecords
 
@@ -66,4 +69,4 @@ locals/
 pretrained/
 
 # Data
-datasets/
+# datasets/
