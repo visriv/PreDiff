@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 from matplotlib.font_manager import FontProperties
 from matplotlib.colors import ListedColormap
 from matplotlib.patches import Patch
-from .e4deg__cmap import get_cmap, VIL_COLORS, VIL_LEVELS
+from .kol__cmap import get_cmap, VIL_COLORS, VIL_LEVELS
 from mpl_toolkits.basemap import Basemap
 import wandb
 
@@ -43,7 +43,7 @@ def plot_hit_miss_fa_all_thresholds(ax, y_true, y_pred, **unused_kwargs):
     ax.imshow(fig, cmap=cmap)
 
 
-def vis_e4deg_seq(
+def vis_kol_seq(
         save_path,
         seq: Union[np.ndarray, Sequence[np.ndarray]],
         label: Union[str, Sequence[str]] = "pred",
@@ -162,7 +162,7 @@ def vis_e4deg_seq(
 
 
 
-def vis_e4deg_custom(
+def vis_kol_custom(
         save_path,
         seq: Union[np.ndarray, Sequence[np.ndarray]],
         label: Union[str, Sequence[str]] = "pred",
@@ -195,23 +195,14 @@ def vis_e4deg_custom(
             ax = axes[row, col]
 
 
-            m = Basemap(ax = ax, projection = 'cyl', llcrnrlat = -90, urcrnrlat = 90, llcrnrlon = -180, urcrnrlon = 180, resolution = 'c')
-            m.drawcoastlines(linewidth = 0.7)
-            #vmin = 95000
-            #vmax = 106000
-            lon = np.linspace(-180, 180, 32)
-            lat = np.linspace(-90, 90, 32)
-            lon, lat = np.meshgrid(lon, lat)
-            x, y = m(lon, lat)
-
-
-
-            levels = np.linspace(min_value, max_value, 21)
-            cf = m.contourf(x,y, data_array[row][col], levels, cmap = 'RdBu_r')
-            cbar = fig.colorbar(ax = ax, mappable = cf, shrink = 0.6)# orientation='vertical')#, shrink=0.6)
-
-            # ax.set_title(title_array[ax_idx])
+           
+            # cf = m.contourf(x,y, , levels, cmap = 'RdBu_r')
+            # cbar = fig.colorbar(ax = ax, mappable = cf, shrink = 0.6)# orientation='vertical')#, shrink=0.6)
+            img = ax.imshow(data_array[row][col][:,:,0], cmap='RdBu_r')
+            # plt.
     
+    fig.colorbar(img, ax=axes.ravel().tolist(), orientation='vertical', fraction=0.015, pad=0.04)
+
     print("label while plotting:", label)
     plt.savefig(save_path)
     wandb.log({"target vs predicted": wandb.Image(save_path)})

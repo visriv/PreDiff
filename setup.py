@@ -48,6 +48,8 @@ requirements = [
     'tensorboard',
     'diffusers==0.13.0',
     'taming-transformers==0.0.1',
+    'basemap',
+    'wandb'
 ]
 
 setup(

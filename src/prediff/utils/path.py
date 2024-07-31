@@ -7,6 +7,7 @@ default_exps_dir = os.path.abspath(os.path.join(root_dir, "experiments"))
 default_dataset_dir = os.path.abspath(os.path.join(root_dir, "datasets"))
 default_dataset_sevir_dir = os.path.abspath(os.path.join(default_dataset_dir, "sevir"))
 default_dataset_sevirlr_dir = os.path.abspath(os.path.join(default_dataset_dir, "sevirlr"))
+default_dataset_kol_dir = os.path.abspath(os.path.join(default_dataset_dir, "kol"))
 
 default_pretrained_dir = os.path.abspath(os.path.join(root_dir, "pretrained"))
 default_pretrained_metrics_dir = os.path.abspath(os.path.join(default_pretrained_dir, "metrics"))
