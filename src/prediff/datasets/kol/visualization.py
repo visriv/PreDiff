@@ -182,9 +182,10 @@ def vis_kol_custom(
     # Find the minimum and maximum values
     min_value = min(array.min() for array in flat_data)
     max_value = max(array.max() for array in flat_data)
-
+    
+    maxcols_final = max(maxcols, max(ncols))
     # title_array = ['Last Input Image', 'Target Image','Predicted Image', 'Pixel-wise Absolute Error']
-    fig, axes = plt.subplots(nrows=nrows, ncols=maxcols, figsize=(80, 10), dpi = 250)
+    fig, axes = plt.subplots(nrows=nrows, ncols=maxcols_final, figsize=(80, 10), dpi = 250)
     # axes = axes.flatten()
 
     

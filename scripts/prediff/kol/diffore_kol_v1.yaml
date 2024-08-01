@@ -25,18 +25,18 @@ layout:
   layout: "NTHWC"
 optim:
   total_batch_size: 64
-  micro_batch_size: 2
+  micro_batch_size: 8
   seed: 0
   float32_matmul_precision: "high"
   method: "adamw"
-  lr: 1.0e-3
+  lr: 5.0e-4
   wd: 1.0e-5
   betas: [0.9, 0.999]
   gradient_clip_val: 1.0
   max_epochs: 100
   loss_type: "l2"
   # scheduler
-  warmup_percentage: 0.1
+  warmup_percentage: 0.2
   lr_scheduler_mode: "cosine"
   min_lr_ratio: 1.0e-3
   warmup_min_lr_ratio: 0.1
@@ -63,8 +63,8 @@ trainer:
   num_sanity_val_steps: 2
 eval:
   train_example_data_idx_list: [0, ]
-  val_example_data_idx_list: [0, 16, 32, 48, 64, 72, 96, 108, 128]
-  test_example_data_idx_list: [0, 16, 32, 48, 64, 72, 96, 108, 128]
+  val_example_data_idx_list: [0, 80]
+  test_example_data_idx_list: [0, 80]
   eval_example_only: true
   eval_aligned: false
   eval_unaligned: true

@@ -1173,10 +1173,10 @@ def main():
     mean = dm.mean
 
     train_dl = dm.train_dataloader()
-    for i, (batch_data, batch_labels) in enumerate(train_dl):
+    for i, _ in enumerate(train_dl):
         print(f'Batch {i+1}')
-        print('Data:', batch_data.shape)
-        print('Labels:', batch_labels.shape)
+        # print('Data:', batch_data.shape)
+        # print('Labels:', batch_labels.shape)
         break
 
 
