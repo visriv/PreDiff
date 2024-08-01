@@ -1,6 +1,6 @@
 dataset:
   dataset_name: "kol_30"
-  data_path: 'datasets/kol/results.h5'
+  data_path: '../../../datasets/kol/results.h5'
   crop: 128
   img_height: 128
   img_width: 128
@@ -30,7 +30,7 @@ optim:
   seed: 0
   float32_matmul_precision: "high"
   method: "adamw"
-  lr: 5.0e-4
+  lr: 1.0e-3
   wd: 1.0e-5
   betas: [0.9, 0.999]
   gradient_clip_val: 1.0

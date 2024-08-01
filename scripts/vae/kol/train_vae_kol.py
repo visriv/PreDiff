@@ -396,6 +396,7 @@ class VAEkolPLModule(pl.LightningModule):
                              micro_batch_size: int = 1,
                              num_workers: int = 8):
         dm = kolLightningDataModule(
+            data_path=dataset_cfg["data_path"],
             seq_len=dataset_cfg["seq_len"],
             crop = dataset_cfg["crop"],
             # stride=dataset_cfg["stride"],

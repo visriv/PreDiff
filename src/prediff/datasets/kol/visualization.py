@@ -206,4 +206,4 @@ def vis_kol_custom(
 
     print("label while plotting:", label)
     plt.savefig(save_path)
-    wandb.log({"target vs predicted": wandb.Image(save_path)})
+    # wandb.log({"target vs predicted": wandb.Image(save_path)})

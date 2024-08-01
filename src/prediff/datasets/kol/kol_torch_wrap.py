@@ -25,7 +25,7 @@ import math
 
 class kolTorchDataset(TorchDataset):
 
-    def __init__(self,  split="train", window_length = 1,
+    def __init__(self, data_path='datasets/kol/results.h5', split="train", window_length = 1,
                  train_ratio = 0.8, val_ratio = 0.1, standardize=True,
                  flatten = False, crop=0):
         super().__init__()
@@ -34,7 +34,8 @@ class kolTorchDataset(TorchDataset):
         self.crop = crop
         self.window_length = window_length
         # === data preprocess ===
-        data_file = 'datasets/kol/results.h5'
+        print(os.getcwd())
+        data_file = data_path
         hdf_file = h5py.File(data_file, 'r')
         velocity = hdf_file['velocity_field'][:]
 
@@ -137,8 +138,9 @@ class kolTorchDataset(TorchDataset):
 class kolLightningDataModule(LightningDataModule):
 
     def __init__(self,
+                 data_path = 'datasets/kol/results.h5',
                  seq_len: int = 5,
-                crop: int = 0,
+                 crop: int = 0,
                  layout: str = "NTHWC",
                  output_type = np.float32,
                  rescale_method: str = "01",
@@ -155,6 +157,7 @@ class kolLightningDataModule(LightningDataModule):
                  seed: int = 0,
                  ):
         super(kolLightningDataModule, self).__init__()
+        self.data_path = data_path
         self.seq_len = seq_len
         self.crop = crop
         # self.stride = stride
@@ -226,9 +229,11 @@ class kolLightningDataModule(LightningDataModule):
     def setup(self, stage = None) -> None:
         seed_everything(seed=self.seed)
         if stage in (None, "fit"):
+            print(os.getcwd())
 
             self.kol_train = kolTorchDataset(
                 split= "train", 
+                data_path = self.data_path,
                 window_length=self.seq_len,
                 train_ratio = self.train_ratio,
                 val_ratio = self.val_ratio,
@@ -237,6 +242,7 @@ class kolLightningDataModule(LightningDataModule):
             
             self.kol_val = kolTorchDataset(
                 split= "val", 
+                data_path = self.data_path,
                 window_length=self.seq_len,
                 train_ratio = self.train_ratio,
                 val_ratio = self.val_ratio,
@@ -250,7 +256,8 @@ class kolLightningDataModule(LightningDataModule):
             
         if stage in (None, "test"):
             self.kol_test = kolTorchDataset(
-                split= "test", 
+                split= "test",                 
+                data_path = self.data_path,
                 window_length=self.raw_seq_len,
                 train_ratio = self.train_ratio,
                 val_ratio = self.val_ratio,

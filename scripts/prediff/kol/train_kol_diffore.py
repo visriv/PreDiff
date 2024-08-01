@@ -19,6 +19,7 @@ from omegaconf import OmegaConf
 import os
 import argparse
 from einops import rearrange
+import wandb
 
 from prediff.datasets.kol.kol_torch_wrap import kolLightningDataModule
 from prediff.datasets.kol.visualization import vis_kol_seq,  vis_kol_custom
@@ -28,7 +29,7 @@ from prediff.utils.pl_checkpoint import pl_load
 from prediff.utils.download import (
     download_pretrained_weights,
     pretrained_kol_vae_name,
-    # pretrained_kol_earthformerunet_name
+    pretrained_kol_earthformerunet_name 
     )
 from prediff.utils.optim import warmup_lambda, disable_train
 from prediff.utils.layout import layout_to_in_out_slice
@@ -696,6 +697,7 @@ class DifforekolPLModule(LatentDiffusion):
                              micro_batch_size: int = 1,
                              num_workers: int = 8):
         dm = kolLightningDataModule(
+            data_path=dataset_cfg["data_path"],
             seq_len=dataset_cfg["seq_len"],
             crop = dataset_cfg["crop"],
             # stride=dataset_cfg["stride"],
