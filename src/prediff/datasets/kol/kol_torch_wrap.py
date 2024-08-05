@@ -34,7 +34,7 @@ class kolTorchDataset(TorchDataset):
         self.crop = crop
         self.window_length = window_length
         # === data preprocess ===
-        print(os.getcwd())
+        # print(os.getcwd())
         data_file = data_path
         hdf_file = h5py.File(data_file, 'r')
         velocity = hdf_file['velocity_field'][:]
@@ -258,7 +258,7 @@ class kolLightningDataModule(LightningDataModule):
             self.kol_test = kolTorchDataset(
                 split= "test",                 
                 data_path = self.data_path,
-                window_length=self.raw_seq_len,
+                window_length=self.seq_len,
                 train_ratio = self.train_ratio,
                 val_ratio = self.val_ratio,
                 standardize=True,

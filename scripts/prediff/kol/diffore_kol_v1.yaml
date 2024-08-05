@@ -8,6 +8,9 @@ dataset:
   out_len: 1
   seq_len: 6
   plot_stride: 1
+  rollout_start_batch_idx: [0, 1]
+  rollout_timesteps: 1000
+  test_rollout: True
   interval_real_time: 10
   sample_mode: "sequent"
   layout: "NTHWC"
@@ -110,7 +113,7 @@ model:
     base_units: 256
     # block_units: null
     scale_alpha: 1.0
-    num_heads: 8
+    num_heads: 4
     attn_drop: 0.1
     proj_drop: 0.1
     ffn_drop: 0.1

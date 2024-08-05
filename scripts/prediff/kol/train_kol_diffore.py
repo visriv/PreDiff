@@ -5,6 +5,8 @@ from shutil import copyfile
 import inspect
 from collections import OrderedDict
 import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 import torch
 from torch.optim.lr_scheduler import LambdaLR, CosineAnnealingLR, SequentialLR
 import torchmetrics
@@ -83,7 +85,11 @@ class DifforekolPLModule(LatentDiffusion):
         oc = self.get_base_config(oc_from_file=oc_from_file)
         self.save_hyperparameters(oc)
         self.oc = oc
-
+        self.rollout_timesteps = oc.dataset.rollout_timesteps
+        self.rollout_start_batch_idx = oc.dataset.rollout_start_batch_idx
+        self.dataset_cfg = oc.dataset
+        self.test_rollout = oc.dataset.test_rollout
+        
         latent_model_cfg = OmegaConf.to_object(oc.model.latent_model)
         num_blocks = len(latent_model_cfg["depth"])
         if isinstance(latent_model_cfg["self_pattern"], str):
@@ -839,27 +845,6 @@ class DifforekolPLModule(LatentDiffusion):
             pred_seq_list = []
             pred_label_list = []
             for i in range(self.oc.eval.num_samples_per_context):
-                # aligned sampling
-                if self.use_alignment and self.oc.eval.eval_aligned:
-                    if self.alignment_type == "avg_x":
-                        alignment_kwargs = get_alignment_kwargs_avg_x(context_seq=context_seq,
-                                                                      target_seq=target_seq)
-                    else:
-                        raise NotImplementedError
-                    pred_seq = self.sample(
-                        cond=cond,
-                        batch_size=micro_batch_size,
-                        return_intermediates=False,
-                        use_alignment=True,
-                        alignment_kwargs=alignment_kwargs,
-                        verbose=False, ).contiguous()
-                    aligned_pred_seq_list.append(pred_seq[0].detach().float().cpu().numpy()*std+mean)
-                    aligned_pred_label_list.append(f"{self.oc.logging.logging_prefix}_aligned_pred_{i}")
-                    if pred_seq.dtype is not torch.float:
-                        pred_seq = pred_seq.float()
-                    self.valid_aligned_mse(pred_seq, target_seq)
-                    self.valid_aligned_mae(pred_seq, target_seq)
-                    self.valid_aligned_score.update(pred_seq, target_seq)
                 # no alignment
                 if self.oc.eval.eval_unaligned:
                     pred_seq = self.sample(
@@ -887,6 +872,10 @@ class DifforekolPLModule(LatentDiffusion):
                 mode="val",
                 suffix=f"_rank{self.local_rank}", )
 
+            
+
+
+
     def on_validation_epoch_end(self):
         if self.oc.eval.eval_unaligned:
             valid_mse = self.valid_mse.compute()
@@ -901,20 +890,7 @@ class DifforekolPLModule(LatentDiffusion):
             self.valid_mse.reset()
             self.valid_mae.reset()
             self.valid_score.reset()
-        if self.oc.eval.eval_aligned:
-            valid_mse = self.valid_aligned_mse.compute()
-            valid_mae = self.valid_aligned_mae.compute()
-            valid_score = self.valid_aligned_score.compute()
-            valid_loss = -valid_score["avg"]["csi"]
-
-            self.log('valid_aligned_loss_epoch', valid_loss, prog_bar=True, on_step=False, on_epoch=True,
-                     sync_dist=True)
-            self.log('valid_aligned_mse_epoch', valid_mse, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
-            self.log('valid_aligned_mae_epoch', valid_mae, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
-            self.log_score_epoch_end(score_dict=valid_score, prefix="valid_aligned")
-            self.valid_aligned_mse.reset()
-            self.valid_aligned_mae.reset()
-            self.valid_aligned_score.reset()
+        
 
     def test_step(self, batch, batch_idx):
         micro_batch_size = batch.shape[self.batch_axis]
@@ -953,7 +929,7 @@ class DifforekolPLModule(LatentDiffusion):
                     self.test_aligned_mse(pred_seq, target_seq)
                     self.test_aligned_mae(pred_seq, target_seq)
                     self.test_aligned_score.update(pred_seq, target_seq)
-                    self.test_aligned_fvd.update(pred_seq, real=False)
+                    # self.test_aligned_fvd.update(pred_seq, real=False)
                     pred_seq_bchw = rearrange(pred_seq, "b t h w c -> (b t) c h w")
                     self.test_aligned_ssim(pred_seq_bchw, target_seq_bchw)
                 # no alignment
@@ -975,13 +951,10 @@ class DifforekolPLModule(LatentDiffusion):
                     self.test_mae(pred_seq*std+mean,
                                   target_seq*std+mean)
                     self.test_score.update(pred_seq, target_seq)
-                    self.test_fvd.update(pred_seq, real=False)
+                    # self.test_fvd.update(pred_seq, real=False)
                     pred_seq_bchw = rearrange(pred_seq, "b t h w c -> (b t) c h w")
                     self.test_ssim(pred_seq_bchw, target_seq_bchw)
-            if self.use_alignment and self.oc.eval.eval_aligned:
-                self.test_aligned_fvd.update(target_seq, real=True)
-            if self.oc.eval.eval_unaligned:
-                self.test_fvd.update(target_seq, real=True)
+            
             pred_seq_list = aligned_pred_seq_list + pred_seq_list
             pred_label_list = aligned_pred_label_list + pred_label_list
             self.save_vis_step_end(
@@ -992,6 +965,9 @@ class DifforekolPLModule(LatentDiffusion):
                 pred_label=pred_label_list,
                 mode="test",
                 suffix=f"_rank{self.local_rank}", )
+            
+            if self.test_rollout and batch_idx in self.rollout_start_batch_idx:
+                self.get_rollout(batch, batch_idx, rollout_timesteps = self.rollout_timesteps, cond_len = self.dataset_cfg.in_len)
 
     def on_test_epoch_end(self):
         if self.oc.eval.eval_unaligned:
@@ -999,35 +975,19 @@ class DifforekolPLModule(LatentDiffusion):
             test_mae = self.test_mae.compute()
             test_ssim = self.test_ssim.compute()
             test_score = self.test_score.compute()
-            test_fvd = self.test_fvd.compute()
+            # test_fvd = self.test_fvd.compute()
 
             self.log('test_mse_epoch', test_mse, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
             self.log('test_mae_epoch', test_mae, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
             self.log('test_ssim_epoch', test_ssim, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
             self.log_score_epoch_end(score_dict=test_score, prefix="test")
-            self.log('test_fvd_epoch', test_fvd, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
+            # self.log('test_fvd_epoch', test_fvd, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
             self.test_mse.reset()
             self.test_mae.reset()
             self.test_ssim.reset()
             self.test_score.reset()
-            self.test_fvd.reset()
-        if self.oc.eval.eval_aligned:
-            test_mse = self.test_aligned_mse.compute()
-            test_mae = self.test_aligned_mae.compute()
-            test_ssim = self.test_aligned_ssim.compute()
-            test_score = self.test_aligned_score.compute()
-            test_fvd = self.test_aligned_fvd.compute()
-
-            self.log('test_aligned_mse_epoch', test_mse, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
-            self.log('test_aligned_mae_epoch', test_mae, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
-            self.log('test_aligned_ssim_epoch', test_ssim, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
-            self.log_score_epoch_end(score_dict=test_score, prefix="test_aligned")
-            self.log('test_aligned_fvd_epoch', test_fvd, prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
-            self.test_aligned_mse.reset()
-            self.test_aligned_mae.reset()
-            self.test_aligned_ssim.reset()
-            self.test_aligned_score.reset()
-            self.test_aligned_fvd.reset()
+            # self.test_fvd.reset()
+        
 
     def save_vis_step_end(
             self,
@@ -1115,6 +1075,52 @@ class DifforekolPLModule(LatentDiffusion):
             norms = grad_norm(self.torch_nn_module, norm_type=self.oc.logging.track_grad_norm)
             self.log_dict(norms)
 
+    def get_rollout(self, batch, batch_idx, rollout_timesteps=1, cond_len=5):
+
+        # select only one sample from the batch B
+        batch = torch.unsqueeze(batch[0], 0)
+        target_seq, cond, context_seq = self.get_input(batch, return_verbose=True)
+        micro_batch_size = batch.shape[self.batch_axis]
+        data_idx = int(batch_idx * micro_batch_size)
+
+        pred_seq = self.sample(
+                            cond=cond,
+                            batch_size=micro_batch_size,
+                            return_intermediates=False,
+                            verbose=False, ).contiguous()
+        
+        output_seq = context_seq  # intiial context
+
+        for i in range(rollout_timesteps):
+            cond['y'] = output_seq[:, -cond_len:, :, :, :]
+            pred_seq = self.sample(
+                            cond=cond,
+                            batch_size=micro_batch_size,
+                            return_intermediates=False,
+                            verbose=False, ).contiguous()
+            output_seq = torch.cat((output_seq, pred_seq), dim = 1)
+            print('predicted {} time steps during rollout'.format(i+1))
+        # print(output_seq.shape)
+        # print(cond['y'].shape)
+        output_seq = output_seq.cpu().detach().numpy()
+        np.save( os.path.join(self.example_save_dir, 'output_seq.npy'), 
+                {'output': output_seq,
+                 'data_idx': data_idx})
+        
+        # Save it as animation
+        frames = [] # for storing the generated images
+        fig = plt.figure()
+        for i in range(output_seq.shape[1]):
+            #TODO: selecting index 0 here to plot only vx
+            frames.append([plt.imshow(output_seq[0][i][:,:,0], cmap='RdBu_r', animated=True)])
+
+        ani = animation.ArtistAnimation(fig, frames, interval=5, blit=True,
+                                        repeat_delay=1000)
+        ani.save(os.path.join(self.example_save_dir, 'output_seq.mp4') )
+
+
+        
+        
 
 def get_parser():
     parser = argparse.ArgumentParser()
@@ -1144,9 +1150,7 @@ def main():
         download_pretrained_weights(ckpt_name=pretrained_kol_earthformerunet_name,
                                     save_dir=default_pretrained_earthformerunet_dir,
                                     exist_ok=False)
-        download_pretrained_weights(ckpt_name=pretrained_kol_alignment_name,
-                                    save_dir=default_pretrained_alignment_dir,
-                                    exist_ok=False)
+        
     if args.cfg is not None:
         oc_from_file = OmegaConf.load(open(args.cfg, "r"))
         dataset_cfg = OmegaConf.to_object(oc_from_file.dataset)

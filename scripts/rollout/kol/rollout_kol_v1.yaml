@@ -110,7 +110,7 @@ model:
     base_units: 256
     # block_units: null
     scale_alpha: 1.0
-    num_heads: 8
+    num_heads: 4
     attn_drop: 0.1
     proj_drop: 0.1
     ffn_drop: 0.1
