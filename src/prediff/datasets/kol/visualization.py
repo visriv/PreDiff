@@ -196,10 +196,15 @@ def vis_kol_custom(
             ax = axes[row, col]
 
 
-           
+        #    : (10, 2, 128, 128) 2
             # cf = m.contourf(x,y, , levels, cmap = 'RdBu_r')
             # cbar = fig.colorbar(ax = ax, mappable = cf, shrink = 0.6)# orientation='vertical')#, shrink=0.6)
-            img = ax.imshow(data_array[row][col][:,:,0], cmap='RdBu_r')
+            print('shape of data array before plotting:', data_array[0].shape, len(data_array))
+            
+            if (data_array[0].shape[-1] == 2):
+                img = ax.imshow(data_array[row][col][:,:,0], cmap='RdBu_r')
+            elif (data_array[0].shape[1] == 2):
+                img = ax.imshow(data_array[row][col][0,:,:], cmap='RdBu_r')
             # plt.
     
     fig.colorbar(img, ax=axes.ravel().tolist(), orientation='vertical', fraction=0.015, pad=0.04)

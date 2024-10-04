@@ -1116,7 +1116,7 @@ class DifforekolPLModule(LatentDiffusion):
 
         ani = animation.ArtistAnimation(fig, frames, interval=5, blit=True,
                                         repeat_delay=1000)
-        ani.save(os.path.join(self.example_save_dir, 'output_seq.mp4') )
+        ani.save(os.path.join(self.example_save_dir, 'output_seq.gif') )
 
 
         

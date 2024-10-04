@@ -1,15 +1,15 @@
 dataset:
   dataset_name: "kol_30"
-  data_path: 'datasets/kol/results.h5'
+  data_path: 'datasets/kol/results_2.h5'
   crop: 128
   img_height: 128
   img_width: 128
-  in_len: 5
+  in_len: 10
   out_len: 1
-  seq_len: 6
+  seq_len: 11
   plot_stride: 1
   rollout_start_batch_idx: [0, 1]
-  rollout_timesteps: 1000
+  rollout_timesteps: 50
   test_rollout: True
   interval_real_time: 10
   sample_mode: "sequent"
@@ -21,7 +21,7 @@ dataset:
   threshold_list: [16, 74, 133, 160, 181, 219]
   aug_mode: "2"
 layout:
-  in_len: 5
+  in_len: 10
   out_len: 1
   img_height: 128
   img_width: 128
@@ -37,7 +37,7 @@ optim:
   wd: 1.0e-5
   betas: [0.9, 0.999]
   gradient_clip_val: 1.0
-  max_epochs: 10
+  max_epochs: 20
   loss_type: "l2"
   # scheduler
   warmup_percentage: 0.2
@@ -60,7 +60,7 @@ logging:
   profiler: null
   save_npy: true
 trainer:
-  check_val_every_n_epoch: 2
+  check_val_every_n_epoch: 4
   log_step_ratio: 0.001
   precision: 32
   find_unused_parameters: false
@@ -103,12 +103,12 @@ model:
     cond_stage_forward: null
     scale_by_std: false
     scale_factor: 1.0
-    latent_cond_shape: [5, 16, 16, 64]
+    latent_cond_shape: [10, 16, 16, 64]
   align:
     alignment_type: null
     # alignment_type: "avg_x"
   latent_model:
-    input_shape: [5, 16, 16, 64]
+    input_shape: [10, 16, 16, 64]
     target_shape: [1, 16, 16, 64]
     base_units: 256
     # block_units: null
